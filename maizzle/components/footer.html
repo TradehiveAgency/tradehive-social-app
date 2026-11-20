@@ -1,0 +1,28 @@
+<tr>
+  <td align="center" class="text-center text-muted-foreground text-xs leading-5 px-6 py-6">
+    <p class="m-0 mb-2">
+      {!! str_replace(':brand', '<a href="https://tradehiveagency.com" target="_blank" style="color: inherit; font-weight: 600; text-decoration: none;">TradeHive Social</a>', e(__('mail.layout.tagline'))) !!}
+    </p>
+
+    <yield />
+
+    <table role="presentation" cellpadding="0" cellspacing="0" border="0" class="mx-auto mt-3">
+      <tr>
+        <td class="px-1">
+          <a href="https://github.com/TradehiveAgency/tradehive-social" target="_blank">
+            <img src="@{{ asset('/images/emails/social/github.png') }}" width="20" height="20" alt="GitHub">
+          </a>
+        </td>
+        <td class="px-1">
+          <a href="https://www.instagram.com/tradehiveagency" target="_blank">
+            <img src="@{{ asset('/images/emails/social/instagram.png') }}" width="20" height="20" alt="Instagram">
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p class="m-0 mt-3">
+      &copy; @{{ date('Y') }} TradeHive LLC
+    </p>
+  </td>
+</tr>

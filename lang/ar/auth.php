@@ -1,0 +1,143 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication Language Lines
+    |--------------------------------------------------------------------------
+    |
+    | The following language lines are used during authentication for various
+    | messages that we need to display to the user. You are free to modify
+    | these language lines according to your application's requirements.
+    |
+    */
+
+    'failed' => 'بيانات الاعتماد هذه لا تطابق سجلاتنا.',
+    'password' => 'كلمة المرور المُدخلة غير صحيحة.',
+    'throttle' => 'عدد كبير جدًا من محاولات تسجيل الدخول. يرجى المحاولة مرة أخرى بعد :seconds ثانية.',
+
+    'flash' => [
+        'welcome' => 'مرحبًا بك في TradeHive Social!',
+        'welcome_trial' => 'مرحبًا بك في TradeHive Social! لقد بدأت فترتك التجريبية.',
+    ],
+
+    'legal' => 'بمتابعتك، فإنك توافق على <a href=":terms_url" target="_blank">شروط الخدمة</a> و<a href=":privacy_url" target="_blank">سياسة الخصوصية</a>.',
+
+    'reviews' => [
+        'eyebrow' => '5/5 على G2',
+        'heading' => 'محبوب لدى من ينشرون كل يوم',
+    ],
+
+    'panel' => [
+        'heading' => 'وسائل التواصل الخاصة بك، بلا عناء.',
+        'schedule' => [
+            'title' => 'خطّط مرة وانشر في كل مكان',
+            'body' => 'Instagram وFacebook وTikTok وLinkedIn وYouTube وGoogle Business والمزيد من تقويم واحد.',
+        ],
+        'ai' => [
+            'title' => 'ذكاء اصطناعي يكتب بأسلوبك',
+            'body' => 'جهّز منشورات أسبوع كامل في دقائق، أو دع مساعدك الذكي يتولى ذلك عبر MCP.',
+        ],
+        'approvals' => [
+            'title' => 'وافق قبل النشر',
+            'body' => 'لكل عميل وعلامة تجارية مساحته الخاصة، مع موافقة بنقرة واحدة.',
+        ],
+        'local' => [
+            'title' => 'مصمم للأعمال المحلية',
+            'body' => 'منشورات Google Business وطلبات التقييم والعروض الموسمية التي تجلب العملاء.',
+        ],
+    ],
+
+    'or_continue_with' => 'أو تابع باستخدام',
+    'or_continue_with_email' => 'أو تابع باستخدام البريد الإلكتروني',
+    'google_login' => 'تسجيل الدخول عبر Google',
+    'google_signup' => 'التسجيل عبر Google',
+    'github_login' => 'تسجيل الدخول عبر GitHub',
+    'github_signup' => 'التسجيل عبر GitHub',
+    'github_email_unavailable' => 'تعذر جلب بريدك الإلكتروني من GitHub. اجعل بريدك على GitHub عامًا أو امنح نطاق الوصول إلى البريد، ثم حاول مرة أخرى.',
+
+    'login' => [
+        'title' => 'الدخول إلى TradeHive',
+        'page_title' => 'تسجيل الدخول',
+        'email' => 'البريد الإلكتروني',
+        'password' => 'كلمة المرور',
+        'show_password' => 'إظهار كلمة المرور',
+        'hide_password' => 'إخفاء كلمة المرور',
+        'forgot_password' => 'نسيت كلمة المرور؟',
+        'remember_me' => 'تذكّرني',
+        'submit' => 'تسجيل الدخول',
+        'no_account' => 'ليس لديك حساب؟',
+        'sign_up' => 'إنشاء حساب',
+    ],
+
+    'register' => [
+        'title' => 'أنشئ حساب TradeHive',
+        'page_title' => 'التسجيل',
+        'name' => 'الاسم',
+        'name_placeholder' => 'الاسم الكامل',
+        'email' => 'البريد الإلكتروني',
+        'password' => 'كلمة المرور',
+        'show_password' => 'إظهار كلمة المرور',
+        'hide_password' => 'إخفاء كلمة المرور',
+        'submit' => 'إنشاء حساب',
+        'has_account' => 'هل لديك حساب بالفعل؟',
+        'log_in' => 'تسجيل الدخول',
+        'password_requirements' => [
+            'min' => ':count أحرف على الأقل',
+            'mixed_case' => 'أحرف كبيرة وصغيرة',
+            'number' => 'رقم واحد على الأقل',
+            'symbol' => 'رمز واحد على الأقل',
+        ],
+    ],
+
+    'forgot_password' => [
+        'title' => 'نسيت كلمة المرور',
+        'description' => 'أدخل بريدك الإلكتروني لاستلام رابط إعادة تعيين كلمة المرور',
+        'page_title' => 'نسيت كلمة المرور',
+        'email' => 'البريد الإلكتروني',
+        'submit' => 'إرسال رابط إعادة تعيين كلمة المرور',
+        'return_to' => 'أو، العودة إلى',
+        'log_in' => 'تسجيل الدخول',
+    ],
+
+    'reset_password' => [
+        'title' => 'إعادة تعيين كلمة المرور',
+        'description' => 'يرجى إدخال كلمة المرور الجديدة أدناه',
+        'page_title' => 'إعادة تعيين كلمة المرور',
+        'email' => 'البريد الإلكتروني',
+        'password' => 'كلمة المرور',
+        'confirm_password' => 'تأكيد كلمة المرور',
+        'confirm_placeholder' => 'تأكيد كلمة المرور',
+        'submit' => 'إعادة تعيين كلمة المرور',
+    ],
+
+    'verify_email' => [
+        'title' => 'تأكيد البريد الإلكتروني',
+        'description' => 'يرجى تأكيد بريدك الإلكتروني بالنقر على الرابط الذي أرسلناه إليك للتو.',
+        'page_title' => 'تأكيد البريد الإلكتروني',
+        'link_sent' => 'تم إرسال رابط تأكيد جديد إلى البريد الإلكتروني الذي قدّمته أثناء التسجيل.',
+        'resend' => 'إعادة إرسال بريد التأكيد',
+        'log_out' => 'تسجيل الخروج',
+    ],
+
+    'accept_invite' => [
+        'page_title' => 'قبول الدعوة',
+        'title' => 'لقد تمت دعوتك!',
+        'description' => 'لقد تمت دعوتك للانضمام إلى مساحة العمل :workspace.',
+        'workspace' => 'مساحة العمل',
+        'your_role' => 'دورك',
+        'email' => 'البريد الإلكتروني',
+        'accept' => 'قبول الدعوة',
+        'decline' => 'رفض الدعوة',
+        'login_prompt' => 'سجّل الدخول أو أنشئ حسابًا لقبول هذه الدعوة.',
+        'log_in' => 'تسجيل الدخول',
+        'create_account' => 'إنشاء حساب',
+        'expired_title' => 'هذه الدعوة لم تعد صالحة',
+        'expired_description' => 'تم حذف مساحة العمل المرتبطة بهذه الدعوة. اطلب دعوة جديدة من مالك الحساب إذا كنت لا تزال بحاجة إلى الوصول.',
+        'expired_action' => 'الانتقال إلى الصفحة الرئيسية',
+    ],
+
+];

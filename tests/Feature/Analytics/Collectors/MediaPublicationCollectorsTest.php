@@ -1,0 +1,598 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Enums\Analytics\MetricTimeBasis;
+use App\Enums\Analytics\PublicationContentType;
+use App\Enums\SocialAccount\Platform;
+use App\Exceptions\Analytics\AnalyticsCollectionException;
+use App\Models\SocialAccount;
+use App\Services\Analytics\Collectors\Publications\MastodonPublicationCollector;
+use App\Services\Analytics\Collectors\Publications\PinterestPublicationCollector;
+use App\Services\Analytics\Collectors\Publications\PublicationHistoryCollectorFactory;
+use App\Services\Analytics\Collectors\Publications\ThreadsPublicationCollector;
+use App\Services\Analytics\Collectors\Publications\TikTokPublicationCollector;
+use App\Services\Analytics\Collectors\Publications\XPublicationCollector;
+use App\Services\Analytics\Collectors\Publications\YouTubePublicationCollector;
+use App\Support\Social\ThreadsPoll;
+use App\Support\Social\XPoll;
+use Carbon\CarbonImmutable;
+use Illuminate\Http\Client\Request;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Http;
+
+beforeEach(function () {
+    Bus::fake();
+});
+
+test('x reads one owned timeline page with only discovery fields', function () {
+    Http::fake(['*' => Http::response([
+        'data' => [[
+            'id' => 'tweet-1',
+            'text' => 'A paid read',
+            'created_at' => '2026-09-20T12:00:00.000Z',
+            'attachments' => ['media_keys' => ['media-1']],
+        ]],
+        'includes' => ['media' => [[
+            'media_key' => 'media-1',
+            'type' => 'photo',
+            'url' => 'https://cdn.example/tweet.jpg',
+        ]]],
+        'meta' => ['next_token' => 'x-next'],
+    ])]);
+    $account = SocialAccount::factory()->create([
+        'platform' => Platform::X,
+        'username' => 'example',
+    ]);
+
+    $page = app(XPublicationCollector::class)->page(
+        $account,
+        'x-cursor',
+        CarbonImmutable::parse('2026-01-01', 'UTC'),
+    );
+
+    expect($page->publications)->toHaveCount(1)
+        ->and($page->publications[0]->contentType)->toBe(PublicationContentType::Image)
+        ->and($page->publications[0]->contentTypeReported)->toBeTrue()
+        ->and($page->publications[0]->permalink)->toBe('https://x.com/example/status/tweet-1')
+        ->and($page->nextCursor)->toBe('x-next')
+        ->and($page->providerExhausted)->toBeFalse();
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), "/users/{$account->platform_user_id}/tweets")
+        && $request['pagination_token'] === 'x-cursor'
+        && $request['exclude'] === 'retweets,replies'
+        && $request['tweet.fields'] === 'created_at,attachments,note_tweet,referenced_tweets'
+        && $request['media.fields'] === 'media_key,type,preview_image_url,url,variants'
+        && ! str_contains((string) $request['tweet.fields'], 'public_metrics'));
+});
+
+test('pinterest reads one pin page and records lifetime metric semantics', function () {
+    Http::fake(['*' => Http::response([
+        'items' => [[
+            'id' => 'pin-1',
+            'created_at' => '2026-09-20T12:00:00Z',
+            'title' => 'A pin',
+            'description' => 'Pin description',
+            'media' => [
+                'media_type' => 'video',
+                'images' => ['600x' => ['url' => 'https://cdn.example/pin.jpg']],
+            ],
+        ]],
+        'bookmark' => 'pin-next',
+    ])]);
+    $account = SocialAccount::factory()->create(['platform' => Platform::Pinterest]);
+
+    $page = app(PinterestPublicationCollector::class)->page(
+        $account,
+        'pin-cursor',
+        CarbonImmutable::parse('2026-01-01', 'UTC'),
+    );
+
+    expect($page->publications)->toHaveCount(1)
+        ->and($page->publications[0]->contentType)->toBe(PublicationContentType::Video)
+        ->and($page->publications[0]->providerMetadata)->toMatchArray([
+            'metric_time_basis' => MetricTimeBasis::Lifetime->value,
+        ])
+        ->and($page->nextCursor)->toBe('pin-next');
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/v5/pins')
+        && $request['bookmark'] === 'pin-cursor'
+        && $request['pin_filter'] === 'exclude_repins'
+        && $request['page_size'] === 250);
+});
+
+test('pinterest takes the pin thumbnail from the documented sizes before the originals', function () {
+    Http::fake(['*' => Http::response([
+        'items' => [
+            ['id' => 'pin-large', 'created_at' => '2026-09-20T12:00:00Z', 'media' => ['media_type' => 'image', 'images' => [
+                '1200x' => ['url' => 'https://cdn.example/large.jpg'],
+                'originals' => ['url' => 'https://cdn.example/original.jpg'],
+            ]]],
+            ['id' => 'pin-original', 'created_at' => '2026-09-20T11:00:00Z', 'media' => ['media_type' => 'image', 'images' => [
+                'originals' => ['url' => 'https://cdn.example/original.jpg'],
+            ]]],
+        ],
+    ])]);
+    $account = SocialAccount::factory()->create(['platform' => Platform::Pinterest]);
+
+    $page = app(PinterestPublicationCollector::class)->page($account, null, CarbonImmutable::parse('2026-01-01', 'UTC'));
+
+    expect(collect($page->publications)->map(fn ($publication): ?string => data_get($publication->previewMetadata, 'thumbnail_url'))->all())
+        ->toBe(['https://cdn.example/large.jpg', 'https://cdn.example/original.jpg']);
+});
+
+test('pinterest keeps paging when an older pin precedes an eligible pin', function () {
+    Http::fake(['*' => Http::response([
+        'items' => [
+            ['id' => 'old-pin', 'created_at' => '2025-01-01T12:00:00Z'],
+            ['id' => 'recent-pin', 'created_at' => '2026-09-20T12:00:00Z'],
+        ],
+        'bookmark' => 'pin-next',
+    ])]);
+    $account = SocialAccount::factory()->create(['platform' => Platform::Pinterest]);
+
+    $page = app(PinterestPublicationCollector::class)->page(
+        $account,
+        null,
+        CarbonImmutable::parse('2025-09-23', 'UTC'),
+    );
+
+    expect(array_column($page->publications, 'providerPostId'))->toBe(['recent-pin'])
+        ->and($page->nextCursor)->toBe('pin-next')
+        ->and($page->providerExhausted)->toBeFalse()
+        ->and($page->canStopAtTarget)->toBeFalse();
+});
+
+test('youtube pages the uploads playlist and hydrates videos in one batch without inferring shorts', function () {
+    $api = config('trypost.platforms.youtube.data_api');
+    Http::fake([
+        "{$api}/channels*" => Http::response([
+            'items' => [['contentDetails' => ['relatedPlaylists' => ['uploads' => 'uploads-1']]]],
+        ]),
+        "{$api}/playlistItems*" => Http::response([
+            'items' => [
+                ['contentDetails' => ['videoId' => 'video-1']],
+                ['contentDetails' => ['videoId' => 'video-2']],
+            ],
+            'nextPageToken' => 'youtube-next',
+        ]),
+        "{$api}/videos*" => Http::response([
+            'items' => [
+                [
+                    'id' => 'video-1',
+                    'snippet' => [
+                        'title' => 'Short-shaped upload',
+                        'description' => 'Still not authoritatively a Short',
+                        'publishedAt' => '2026-09-20T12:00:00Z',
+                        'thumbnails' => ['medium' => ['url' => 'https://cdn.example/video-1.jpg']],
+                    ],
+                    'contentDetails' => ['duration' => 'PT20S'],
+                ],
+                [
+                    'id' => 'video-2',
+                    'snippet' => [
+                        'title' => 'Long upload',
+                        'publishedAt' => '2026-09-19T12:00:00Z',
+                    ],
+                    'contentDetails' => ['duration' => 'PT20M'],
+                ],
+            ],
+        ]),
+    ]);
+    $account = SocialAccount::factory()->create(['platform' => Platform::YouTube]);
+
+    $page = app(YouTubePublicationCollector::class)->page(
+        $account,
+        'youtube-cursor',
+        CarbonImmutable::parse('2026-01-01', 'UTC'),
+    );
+
+    expect($page->publications)->toHaveCount(2)
+        ->and(array_column($page->publications, 'contentType'))->toBe([
+            PublicationContentType::Video,
+            PublicationContentType::Video,
+        ])
+        ->and(array_column($page->publications, 'contentTypeReported'))->toBe([false, false])
+        ->and($page->nextCursor)->toBe('youtube-next');
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/playlistItems')
+        && $request['playlistId'] === 'uploads-1'
+        && $request['pageToken'] === 'youtube-cursor');
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/videos')
+        && $request['id'] === 'video-1,video-2');
+});
+
+test('youtube classifies an invalid saved page token for bounded backfill recovery', function () {
+    $api = config('trypost.platforms.youtube.data_api');
+    Http::fake([
+        "{$api}/channels*" => Http::response([
+            'items' => [['contentDetails' => ['relatedPlaylists' => ['uploads' => 'uploads-1']]]],
+        ]),
+        "{$api}/playlistItems*" => Http::response([
+            'error' => ['errors' => [['reason' => 'invalidPageToken']]],
+        ], 400),
+    ]);
+    $account = SocialAccount::factory()->create(['platform' => Platform::YouTube]);
+
+    expect(fn () => app(YouTubePublicationCollector::class)->page(
+        $account,
+        'expired-token',
+        CarbonImmutable::parse('2026-01-01', 'UTC'),
+    ))->toThrow(AnalyticsCollectionException::class, 'publication history cursor expired');
+});
+
+test('x classifies an invalid pagination token without confusing other bad requests', function () {
+    $account = SocialAccount::factory()->x()->create();
+    Http::fake(['*' => Http::response(['detail' => 'The pagination_token is invalid'], 400)]);
+
+    expect(fn () => app(XPublicationCollector::class)->page(
+        $account,
+        'expired-token',
+        CarbonImmutable::parse('2026-01-01', 'UTC'),
+    ))->toThrow(fn (AnalyticsCollectionException $exception): bool => $exception->category === 'invalid_cursor');
+});
+
+test('a cursor-like provider error cannot restart a first-page request', function () {
+    $account = SocialAccount::factory()->x()->create();
+    Http::fake(['*' => Http::response(['detail' => 'The pagination_token is invalid'], 400)]);
+
+    expect(fn () => app(XPublicationCollector::class)->page(
+        $account,
+        null,
+        CarbonImmutable::parse('2026-01-01', 'UTC'),
+    ))->toThrow(fn (AnalyticsCollectionException $exception): bool => $exception->category === 'malformed');
+});
+
+test('tiktok classifies an invalid saved cursor from its successful HTTP envelope', function () {
+    $account = SocialAccount::factory()->create([
+        'platform' => Platform::TikTok,
+        'scopes' => ['video.list'],
+    ]);
+    Http::fake(['*' => Http::response([
+        'error' => ['code' => 'invalid_params', 'message' => 'Invalid cursor'],
+    ])]);
+
+    expect(fn () => app(TikTokPublicationCollector::class)->page(
+        $account,
+        '123456789',
+        CarbonImmutable::parse('2026-01-01', 'UTC'),
+    ))->toThrow(fn (AnalyticsCollectionException $exception): bool => $exception->category === 'invalid_cursor');
+});
+
+test('tiktok classifies an invalid saved cursor from HTTP 400', function () {
+    $account = SocialAccount::factory()->create([
+        'platform' => Platform::TikTok,
+        'scopes' => ['video.list'],
+    ]);
+    Http::fake(['*' => Http::response([
+        'error' => ['code' => 'invalid_params', 'message' => 'Invalid cursor'],
+    ], 400)]);
+
+    expect(fn () => app(TikTokPublicationCollector::class)->page(
+        $account,
+        '123456789',
+        CarbonImmutable::parse('2026-01-01', 'UTC'),
+    ))->toThrow(fn (AnalyticsCollectionException $exception): bool => $exception->category === 'invalid_cursor');
+});
+
+test('tiktok reads at most twenty videos and marks expiring covers', function () {
+    Http::fake(['*' => Http::response(['data' => [
+        'videos' => [[
+            'id' => 'video-1',
+            'title' => 'A TikTok',
+            'create_time' => 1_790_000_000,
+            'cover_image_url' => 'https://cdn.example/cover.jpg?x-expires=1790003600',
+            'share_url' => 'https://www.tiktok.com/@example/video/video-1',
+        ]],
+        'cursor' => 1_790_000_000_000,
+        'has_more' => true,
+    ]])]);
+    $account = SocialAccount::factory()->create([
+        'platform' => Platform::TikTok,
+        'scopes' => ['video.list'],
+    ]);
+
+    $page = app(TikTokPublicationCollector::class)->page(
+        $account,
+        '1789000000000',
+        CarbonImmutable::parse('2026-01-01', 'UTC'),
+    );
+
+    expect($page->publications)->toHaveCount(1)
+        ->and($page->publications[0]->contentType)->toBe(PublicationContentType::Video)
+        ->and($page->publications[0]->contentTypeReported)->toBeFalse()
+        ->and($page->publications[0]->previewMetadata)->toMatchArray([
+            'thumbnail_url' => 'https://cdn.example/cover.jpg?x-expires=1790003600',
+            'expires_at' => CarbonImmutable::createFromTimestampUTC(1_790_003_600)->toIso8601String(),
+        ])
+        ->and($page->nextCursor)->toBe('1790000000000');
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), '/video/list/')
+        && $request['max_count'] === 20
+        && $request['cursor'] === 1_789_000_000_000);
+});
+
+test('tiktok reports provider limited coverage when video list scope is missing', function () {
+    Http::fake();
+    $account = SocialAccount::factory()->create([
+        'platform' => Platform::TikTok,
+        'scopes' => ['video.publish'],
+    ]);
+
+    $page = app(TikTokPublicationCollector::class)->page(
+        $account,
+        null,
+        CarbonImmutable::parse('2026-01-01', 'UTC'),
+    );
+
+    expect($page->publications)->toBe([])
+        ->and($page->nextCursor)->toBeNull()
+        ->and($page->providerExhausted)->toBeTrue()
+        ->and($page->providerLimited)->toBeTrue();
+    Http::assertNothingSent();
+});
+
+test('publication collector factory supports media networks', function (Platform $platform, string $collector) {
+    $account = SocialAccount::factory()->create(['platform' => $platform]);
+
+    expect(app(PublicationHistoryCollectorFactory::class)->for($account))->toBeInstanceOf($collector);
+})->with([
+    [Platform::X, XPublicationCollector::class],
+    [Platform::Pinterest, PinterestPublicationCollector::class],
+    [Platform::YouTube, YouTubePublicationCollector::class],
+    [Platform::TikTok, TikTokPublicationCollector::class],
+]);
+
+test('x keeps the full text of long posts and the attached media for the import', function () {
+    Http::fake(['*' => Http::response([
+        'data' => [[
+            'id' => 'tweet-2',
+            'text' => 'Short version…',
+            'note_tweet' => ['text' => 'The whole long post'],
+            'created_at' => '2026-09-20T12:00:00.000Z',
+            'attachments' => ['media_keys' => ['m-1', 'm-2']],
+        ]],
+        'includes' => ['media' => [
+            ['media_key' => 'm-1', 'type' => 'photo', 'url' => 'https://pbs.example.test/1.jpg'],
+            ['media_key' => 'm-2', 'type' => 'video', 'preview_image_url' => 'https://pbs.example.test/2.jpg', 'variants' => [
+                ['bit_rate' => 256000, 'content_type' => 'video/mp4', 'url' => 'https://video.example.test/low.mp4'],
+                ['content_type' => 'application/x-mpegURL', 'url' => 'https://video.example.test/pl.m3u8'],
+            ]],
+        ]],
+        'meta' => [],
+    ])]);
+    $account = SocialAccount::factory()->create(['platform' => Platform::X, 'username' => 'example']);
+
+    $publication = app(XPublicationCollector::class)->page($account, null, CarbonImmutable::parse('2026-01-01', 'UTC'))->publications[0];
+
+    expect($publication->excerpt)->toBe('The whole long post')
+        ->and($publication->providerMetadata)->toEqual(['media' => [
+            ['type' => 'photo', 'url' => 'https://pbs.example.test/1.jpg'],
+            ['type' => 'video', 'variants' => [
+                ['bit_rate' => 256000, 'content_type' => 'video/mp4', 'url' => 'https://video.example.test/low.mp4'],
+                ['content_type' => 'application/x-mpegURL', 'url' => 'https://video.example.test/pl.m3u8'],
+            ]],
+        ]]);
+});
+
+test('youtube resolves the uploads playlist once and reuses it on every later discovery page', function () {
+    $api = config('trypost.platforms.youtube.data_api');
+    Http::fake([
+        "{$api}/channels*" => Http::response([
+            'items' => [['contentDetails' => ['relatedPlaylists' => ['uploads' => 'uploads-1']]]],
+        ]),
+        "{$api}/playlistItems*" => Http::response(['items' => [], 'nextPageToken' => 'youtube-next']),
+    ]);
+    $account = SocialAccount::factory()->create(['platform' => Platform::YouTube]);
+    $collector = app(YouTubePublicationCollector::class);
+
+    $collector->page($account, null, CarbonImmutable::parse('2026-01-01', 'UTC'));
+    $collector->page($account, 'youtube-next', CarbonImmutable::parse('2026-01-01', 'UTC'));
+    $collector->page($account, null, CarbonImmutable::parse('2026-01-01', 'UTC'));
+
+    Http::assertSentCount(4);
+    expect(collect(Http::recorded())->filter(fn (array $pair): bool => str_contains($pair[0]->url(), '/channels'))->count())->toBe(1);
+});
+
+test('x asks the timeline only for posts since the cutoff', function () {
+    Http::fake(['*' => Http::response(['data' => [], 'meta' => []])]);
+    $account = SocialAccount::factory()->create(['platform' => Platform::X]);
+
+    app(XPublicationCollector::class)->page(
+        $account,
+        null,
+        CarbonImmutable::parse('2026-10-09 18:00:00', 'UTC'),
+    );
+
+    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), "/users/{$account->platform_user_id}/tweets")
+        && $request['start_time'] === '2026-10-09T18:00:00Z');
+});
+
+test('an x page with nothing since the cutoff ends the sync', function () {
+    Http::fake(['*' => Http::response(['meta' => ['result_count' => 0]])]);
+    $account = SocialAccount::factory()->create(['platform' => Platform::X]);
+
+    $page = app(XPublicationCollector::class)->page(
+        $account,
+        null,
+        CarbonImmutable::parse('2026-10-09 18:00:00', 'UTC'),
+    );
+
+    expect($page->publications)->toBe([])
+        ->and($page->nextCursor)->toBeNull()
+        ->and($page->providerExhausted)->toBeTrue();
+});
+
+test('x tracks a post, never a reply, so a thread is its root', function () {
+    Http::fake(['*' => Http::response([
+        'data' => [
+            ['id' => 'thread-reply', 'text' => '2/2', 'created_at' => '2026-10-09T12:01:00.000Z', 'referenced_tweets' => [['type' => 'replied_to', 'id' => 'thread-root']]],
+            ['id' => 'quote', 'text' => 'quoting', 'created_at' => '2026-10-09T12:00:30.000Z', 'referenced_tweets' => [['type' => 'quoted', 'id' => 'someone']]],
+            ['id' => 'thread-root', 'text' => '1/2', 'created_at' => '2026-10-09T12:00:00.000Z'],
+        ],
+        'meta' => ['result_count' => 3],
+    ])]);
+    $account = SocialAccount::factory()->create(['platform' => Platform::X]);
+
+    $page = app(XPublicationCollector::class)->page($account, null, CarbonImmutable::parse('2026-10-01', 'UTC'));
+
+    expect(collect($page->publications)->pluck('providerPostId')->all())->toBe(['quote', 'thread-root'])
+        ->and($page->providerRowCount)->toBe(3);
+    Http::assertSent(fn (Request $request): bool => str_contains((string) $request['tweet.fields'], 'referenced_tweets'));
+});
+
+test('x counts toward the timeline cap only the rows it walked before the cutoff', function () {
+    Http::fake(['*' => Http::response([
+        'data' => [
+            ['id' => 'inside', 'text' => 'inside', 'created_at' => '2026-10-09T12:00:00.000Z'],
+            ['id' => 'outside', 'text' => 'outside', 'created_at' => '2026-09-01T12:00:00.000Z'],
+            ['id' => 'older', 'text' => 'older', 'created_at' => '2026-08-01T12:00:00.000Z'],
+        ],
+        'meta' => ['result_count' => 3, 'next_token' => 'more'],
+    ])]);
+    $account = SocialAccount::factory()->create(['platform' => Platform::X]);
+
+    $page = app(XPublicationCollector::class)->page($account, null, CarbonImmutable::parse('2026-10-01', 'UTC'));
+
+    expect(collect($page->publications)->pluck('providerPostId')->all())->toBe(['inside'])
+        ->and($page->providerRowCount)->toBe(1)
+        ->and($page->nextCursor)->toBeNull();
+});
+
+test('x discovery keeps the poll of a post made on x', function () {
+    $createdAt = now()->subDay()->toIso8601ZuluString();
+    $endsAt = now()->addHour()->toIso8601ZuluString();
+    Http::fake(['*' => Http::response([
+        'data' => [
+            [
+                'id' => 'tweet-poll',
+                'text' => 'Should we refund?',
+                'created_at' => $createdAt,
+                'attachments' => ['poll_ids' => ['poll-1']],
+            ],
+            [
+                'id' => 'tweet-media',
+                'text' => 'A photo',
+                'created_at' => $createdAt,
+                'attachments' => ['media_keys' => ['media-1']],
+            ],
+            ['id' => 'tweet-plain', 'text' => 'Plain', 'created_at' => $createdAt],
+        ],
+        'includes' => [
+            'media' => [['media_key' => 'media-1', 'type' => 'photo', 'url' => 'https://cdn.example/tweet.jpg']],
+            'polls' => [[
+                'id' => 'poll-1',
+                'duration_minutes' => 1440,
+                'end_datetime' => $endsAt,
+                'voting_status' => 'open',
+                'options' => [
+                    ['position' => 2, 'label' => '❌ No refund', 'votes' => 1],
+                    ['position' => 1, 'label' => '✅ Refund', 'votes' => 3],
+                ],
+            ]],
+        ],
+    ])]);
+    $account = SocialAccount::factory()->create(['platform' => Platform::X, 'username' => 'example']);
+
+    $page = app(XPublicationCollector::class)->page($account, null, now()->subYear()->toImmutable());
+
+    expect($page->publications[0]->contentType)->toBe(PublicationContentType::Poll)
+        ->and($page->publications[1]->contentType)->toBe(PublicationContentType::Image)
+        ->and($page->publications[2]->contentType)->toBe(PublicationContentType::Text)
+        ->and($page->publications[0]->providerMetadata['poll'])->toEqual([
+            'options' => [['label' => '✅ Refund', 'votes' => 3], ['label' => '❌ No refund', 'votes' => 1]],
+            'voting_status' => 'open',
+            'end_datetime' => $endsAt,
+            'duration_minutes' => 1440,
+        ])
+        ->and($page->publications[1]->providerMetadata)->toHaveKey('media')->not->toHaveKey('poll')
+        ->and($page->publications[2]->providerMetadata)->toBeNull();
+    Http::assertSentCount(1);
+    Http::assertSent(fn (Request $request): bool => $request['expansions'] === 'attachments.media_keys,attachments.poll_ids'
+        && $request['poll.fields'] === XPoll::LOOKUP_FIELDS);
+});
+
+test('mastodon discovery keeps the poll of a status made on mastodon', function () {
+    $createdAt = now()->subDay()->toIso8601ZuluString();
+    $endsAt = now()->addDay()->toIso8601ZuluString();
+    Http::fake(['*' => Http::response([
+        [
+            'id' => 'status-poll',
+            'created_at' => $createdAt,
+            'content' => '<p>Tabs or spaces?</p>',
+            'media_attachments' => [],
+            'poll' => [
+                'expires_at' => $endsAt,
+                'expired' => false,
+                'multiple' => false,
+                'options' => [['title' => 'Tabs', 'votes_count' => 2], ['title' => 'Spaces', 'votes_count' => 5]],
+            ],
+        ],
+        ['id' => 'status-plain', 'created_at' => $createdAt, 'content' => '<p>Plain</p>', 'media_attachments' => []],
+    ])]);
+    $account = SocialAccount::factory()->mastodon()->create();
+
+    $page = app(MastodonPublicationCollector::class)->page($account, null, now()->subYear()->toImmutable());
+
+    expect($page->publications[0]->contentType)->toBe(PublicationContentType::Poll)
+        ->and($page->publications[0]->providerMetadata['poll'])->toEqual([
+            'options' => [['label' => 'Tabs', 'votes' => 2], ['label' => 'Spaces', 'votes' => 5]],
+            'voting_status' => 'open',
+            'end_datetime' => $endsAt,
+            'duration_minutes' => null,
+            'multiple' => false,
+            'voters' => null,
+            'totals_hidden' => false,
+        ])
+        ->and($page->publications[1]->contentType)->toBe(PublicationContentType::Text)
+        ->and($page->publications[1]->providerMetadata)->not->toHaveKey('poll');
+    Http::assertSentCount(1);
+});
+
+test('threads discovery reads the poll in the same request and works out its votes', function () {
+    $endsAt = now()->addHours(12)->startOfSecond();
+    Http::fake(['*' => Http::response(['data' => [
+        [
+            'id' => 'thread-poll',
+            'media_type' => 'TEXT_POST',
+            'text' => 'Tabs or spaces?',
+            'timestamp' => now()->subHour()->toIso8601String(),
+            'poll_attachment' => [
+                'option_a' => 'Tabs',
+                'option_b' => 'Spaces',
+                'option_c' => 'Both',
+                'option_a_votes_percentage' => 0.25,
+                'option_b_votes_percentage' => 0.7,
+                'option_c_votes_percentage' => 0.05,
+                'total_votes' => 20,
+                'expiration_timestamp' => $endsAt->toIso8601String(),
+            ],
+        ],
+        ['id' => 'thread-plain', 'media_type' => 'TEXT_POST', 'text' => 'Plain', 'timestamp' => now()->subHour()->toIso8601String()],
+    ]])]);
+    $account = SocialAccount::factory()->threads()->create();
+
+    $page = app(ThreadsPublicationCollector::class)->page($account, null, now()->subYear()->toImmutable());
+
+    expect($page->publications[0]->contentType)->toBe(PublicationContentType::Poll)
+        ->and($page->publications[0]->providerMetadata['poll'])->toEqual([
+            'options' => [['label' => 'Tabs', 'votes' => 5], ['label' => 'Spaces', 'votes' => 14], ['label' => 'Both', 'votes' => 1]],
+            'voting_status' => 'open',
+            'end_datetime' => $endsAt->utc()->toIso8601ZuluString(),
+            'duration_minutes' => null,
+        ])
+        ->and($page->publications[1]->contentType)->toBe(PublicationContentType::Text)
+        ->and($page->publications[1]->providerMetadata)->toBe(['is_quote_post' => false]);
+    Http::assertSentCount(1);
+    Http::assertSent(fn (Request $request): bool => str_contains((string) $request['fields'], ThreadsPoll::LOOKUP_FIELDS));
+});
+
+test('a threads poll whose end has passed is closed', function () {
+    $result = ThreadsPoll::result([
+        'option_a' => 'Tabs',
+        'option_b' => 'Spaces',
+        'option_a_votes_percentage' => 0.4,
+        'option_b_votes_percentage' => 0.6,
+        'total_votes' => 10,
+        'expiration_timestamp' => now()->subMinute()->toIso8601String(),
+    ]);
+
+    expect($result['voting_status'])->toBe('closed')
+        ->and($result['options'])->toBe([['label' => 'Tabs', 'votes' => 4], ['label' => 'Spaces', 'votes' => 6]]);
+});

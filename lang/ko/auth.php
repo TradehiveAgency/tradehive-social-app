@@ -1,0 +1,143 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication Language Lines
+    |--------------------------------------------------------------------------
+    |
+    | The following language lines are used during authentication for various
+    | messages that we need to display to the user. You are free to modify
+    | these language lines according to your application's requirements.
+    |
+    */
+
+    'failed' => '입력하신 인증 정보가 기록과 일치하지 않습니다.',
+    'password' => '입력하신 비밀번호가 올바르지 않습니다.',
+    'throttle' => '로그인 시도가 너무 많습니다. :seconds초 후에 다시 시도해 주세요.',
+
+    'flash' => [
+        'welcome' => 'TradeHive Social에 오신 것을 환영합니다!',
+        'welcome_trial' => 'TradeHive Social에 오신 것을 환영합니다! 체험이 시작되었습니다.',
+    ],
+
+    'legal' => '계속 진행하면 <a href=":terms_url" target="_blank">서비스 약관</a> 및 <a href=":privacy_url" target="_blank">개인정보 처리방침</a>에 동의하는 것입니다.',
+
+    'reviews' => [
+        'eyebrow' => 'G2에서 5/5',
+        'heading' => '매일 게시하는 사람들의 선택',
+    ],
+
+    'panel' => [
+        'heading' => '소셜 미디어, 이제 맡기세요.',
+        'schedule' => [
+            'title' => '한 번 계획하고 모든 곳에 게시',
+            'body' => 'Instagram, Facebook, TikTok, LinkedIn, YouTube, Google 비즈니스 등을 하나의 캘린더에서.',
+        ],
+        'ai' => [
+            'title' => '내 목소리로 글을 쓰는 AI',
+            'body' => '일주일 치 게시물을 몇 분 만에 작성하거나 MCP로 AI 어시스턴트에게 맡기세요.',
+        ],
+        'approvals' => [
+            'title' => '게시 전에 승인',
+            'body' => '고객과 브랜드마다 별도 워크스페이스, 클릭 한 번으로 승인.',
+        ],
+        'local' => [
+            'title' => '지역 비즈니스를 위해',
+            'body' => '고객을 부르는 Google 비즈니스 게시물, 리뷰 요청, 시즌 프로모션.',
+        ],
+    ],
+
+    'or_continue_with' => '또는 다음으로 계속하기',
+    'or_continue_with_email' => '또는 이메일로 계속하기',
+    'google_login' => 'Google로 로그인',
+    'google_signup' => 'Google로 가입하기',
+    'github_login' => 'GitHub으로 로그인',
+    'github_signup' => 'GitHub으로 가입하기',
+    'github_email_unavailable' => 'GitHub에서 이메일을 가져올 수 없습니다. GitHub 이메일을 공개로 설정하거나 이메일 권한을 부여한 후 다시 시도하세요.',
+
+    'login' => [
+        'title' => 'TradeHive Social에 로그인',
+        'page_title' => '로그인',
+        'email' => '이메일 주소',
+        'password' => '비밀번호',
+        'show_password' => '비밀번호 표시',
+        'hide_password' => '비밀번호 숨기기',
+        'forgot_password' => '비밀번호를 잊으셨나요?',
+        'remember_me' => '로그인 상태 유지',
+        'submit' => '로그인',
+        'no_account' => '계정이 없으신가요?',
+        'sign_up' => '가입하기',
+    ],
+
+    'register' => [
+        'title' => 'TradeHive Social 계정 만들기',
+        'page_title' => '회원가입',
+        'name' => '이름',
+        'name_placeholder' => '전체 이름',
+        'email' => '이메일 주소',
+        'password' => '비밀번호',
+        'show_password' => '비밀번호 표시',
+        'hide_password' => '비밀번호 숨기기',
+        'submit' => '계정 만들기',
+        'has_account' => '이미 계정이 있으신가요?',
+        'log_in' => '로그인',
+        'password_requirements' => [
+            'min' => ':count자 이상',
+            'mixed_case' => '대문자와 소문자',
+            'number' => '숫자 1개 이상',
+            'symbol' => '기호 1개 이상',
+        ],
+    ],
+
+    'forgot_password' => [
+        'title' => '비밀번호 찾기',
+        'description' => '비밀번호 재설정 링크를 받으려면 이메일을 입력하세요',
+        'page_title' => '비밀번호 찾기',
+        'email' => '이메일 주소',
+        'submit' => '비밀번호 재설정 링크 이메일로 받기',
+        'return_to' => '또는 다음으로 돌아가기',
+        'log_in' => '로그인',
+    ],
+
+    'reset_password' => [
+        'title' => '비밀번호 재설정',
+        'description' => '아래에 새 비밀번호를 입력하세요',
+        'page_title' => '비밀번호 재설정',
+        'email' => '이메일',
+        'password' => '비밀번호',
+        'confirm_password' => '비밀번호 확인',
+        'confirm_placeholder' => '비밀번호 확인',
+        'submit' => '비밀번호 재설정',
+    ],
+
+    'verify_email' => [
+        'title' => '이메일 인증',
+        'description' => '방금 보내드린 이메일의 링크를 클릭하여 이메일 주소를 인증해 주세요.',
+        'page_title' => '이메일 인증',
+        'link_sent' => '가입 시 입력하신 이메일 주소로 새 인증 링크를 보냈습니다.',
+        'resend' => '인증 이메일 재전송',
+        'log_out' => '로그아웃',
+    ],
+
+    'accept_invite' => [
+        'page_title' => '초대 수락',
+        'title' => '초대를 받으셨습니다!',
+        'description' => ':workspace 워크스페이스에 참여하도록 초대받으셨습니다.',
+        'workspace' => '워크스페이스',
+        'your_role' => '내 역할',
+        'email' => '이메일',
+        'accept' => '초대 수락',
+        'decline' => '초대 거절',
+        'login_prompt' => '이 초대를 수락하려면 로그인하거나 계정을 만드세요.',
+        'log_in' => '로그인',
+        'create_account' => '계정 만들기',
+        'expired_title' => '이 초대는 더 이상 유효하지 않습니다',
+        'expired_description' => '이 초대의 워크스페이스가 삭제되었습니다. 계속 접근이 필요하면 계정 소유자에게 새 초대를 요청하세요.',
+        'expired_action' => '홈으로',
+    ],
+
+];

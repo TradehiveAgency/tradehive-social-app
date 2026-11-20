@@ -1,0 +1,18 @@
+#cloud-config
+# Paste into "Show advanced options → Management → Initialization script" when
+# creating the Oracle Always Free VM (Ubuntu 24.04, VM.Standard.A1.Flex).
+# On first boot it installs Docker, downloads TradeHive Social and starts it.
+# Progress log on the server: /var/log/tradehive-setup.log
+package_update: true
+packages:
+  - git
+  - netfilter-persistent
+  - iptables-persistent
+runcmd:
+  - |
+    set -eux
+    exec > /var/log/tradehive-setup.log 2>&1
+    git clone --depth 1 https://github.com/TradehiveAgency/tradehive-social-app.git /opt/tradehive
+    chown -R ubuntu:ubuntu /opt/tradehive
+    cd /opt/tradehive/deploy/oracle
+    sudo -u ubuntu bash setup.sh social.tradehiveagency.com

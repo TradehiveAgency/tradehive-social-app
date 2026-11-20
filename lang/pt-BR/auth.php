@@ -1,0 +1,143 @@
+<?php
+
+declare(strict_types=1);
+
+return [
+
+    /*
+    |--------------------------------------------------------------------------
+    | Authentication Language Lines
+    |--------------------------------------------------------------------------
+    |
+    | The following language lines are used during authentication for various
+    | messages that we need to display to the user. You are free to modify
+    | these language lines according to your application's requirements.
+    |
+    */
+
+    'failed' => 'Essas credenciais não correspondem aos nossos registros.',
+    'password' => 'A senha fornecida está incorreta.',
+    'throttle' => 'Muitas tentativas de login. Por favor, tente novamente em :seconds segundos.',
+
+    'flash' => [
+        'welcome' => 'Bem-vindo ao TradeHive Social!',
+        'welcome_trial' => 'Bem-vindo ao TradeHive Social! Seu período de teste começou.',
+    ],
+
+    'legal' => 'Ao continuar, você concorda com nossos <a href=":terms_url" target="_blank">Termos de Serviço</a> e <a href=":privacy_url" target="_blank">Política de Privacidade</a>.',
+
+    'reviews' => [
+        'eyebrow' => '5/5 no G2',
+        'heading' => 'Amado por quem publica todo dia',
+    ],
+
+    'panel' => [
+        'heading' => 'Suas redes sociais, resolvidas.',
+        'schedule' => [
+            'title' => 'Planeje uma vez, publique em todo lugar',
+            'body' => 'Instagram, Facebook, TikTok, LinkedIn, YouTube, Google Business e mais em um só calendário.',
+        ],
+        'ai' => [
+            'title' => 'IA que escreve com a sua voz',
+            'body' => 'Crie uma semana de posts em minutos ou deixe seu assistente de IA cuidar disso via MCP.',
+        ],
+        'approvals' => [
+            'title' => 'Aprove antes de publicar',
+            'body' => 'Cada cliente e marca no seu próprio espaço, com aprovação em um clique.',
+        ],
+        'local' => [
+            'title' => 'Feito para negócios locais',
+            'body' => 'Posts no Google Business, pedidos de avaliação e ofertas sazonais que trazem clientes.',
+        ],
+    ],
+
+    'or_continue_with' => 'Ou continue com',
+    'or_continue_with_email' => 'Ou continue com e-mail',
+    'google_login' => 'Entrar com Google',
+    'google_signup' => 'Cadastrar com Google',
+    'github_login' => 'Entrar com GitHub',
+    'github_signup' => 'Cadastrar com GitHub',
+    'github_email_unavailable' => 'Não foi possível obter seu e-mail do GitHub. Torne seu e-mail público ou conceda a permissão de e-mail e tente novamente.',
+
+    'login' => [
+        'title' => 'Entrar no TradeHive',
+        'page_title' => 'Entrar',
+        'email' => 'Endereço de email',
+        'password' => 'Senha',
+        'show_password' => 'Mostrar senha',
+        'hide_password' => 'Esconder senha',
+        'forgot_password' => 'Esqueceu a senha?',
+        'remember_me' => 'Lembrar de mim',
+        'submit' => 'Entrar',
+        'no_account' => 'Não tem uma conta?',
+        'sign_up' => 'Cadastre-se',
+    ],
+
+    'register' => [
+        'title' => 'Criar uma conta no TradeHive',
+        'page_title' => 'Cadastro',
+        'name' => 'Nome',
+        'name_placeholder' => 'Nome completo',
+        'email' => 'Endereço de email',
+        'password' => 'Senha',
+        'show_password' => 'Mostrar senha',
+        'hide_password' => 'Esconder senha',
+        'submit' => 'Criar conta',
+        'has_account' => 'Já tem uma conta?',
+        'log_in' => 'Entrar',
+        'password_requirements' => [
+            'min' => 'Pelo menos :count caracteres',
+            'mixed_case' => 'Letras maiúsculas e minúsculas',
+            'number' => 'Pelo menos 1 número',
+            'symbol' => 'Pelo menos 1 símbolo',
+        ],
+    ],
+
+    'forgot_password' => [
+        'title' => 'Esqueceu a senha',
+        'description' => 'Digite seu email para receber um link de redefinição de senha',
+        'page_title' => 'Esqueceu a senha',
+        'email' => 'Endereço de email',
+        'submit' => 'Enviar link de redefinição',
+        'return_to' => 'Ou, volte para',
+        'log_in' => 'entrar',
+    ],
+
+    'reset_password' => [
+        'title' => 'Redefinir senha',
+        'description' => 'Por favor, digite sua nova senha abaixo',
+        'page_title' => 'Redefinir senha',
+        'email' => 'Email',
+        'password' => 'Senha',
+        'confirm_password' => 'Confirmar Senha',
+        'confirm_placeholder' => 'Confirmar senha',
+        'submit' => 'Redefinir senha',
+    ],
+
+    'verify_email' => [
+        'title' => 'Verificar email',
+        'description' => 'Por favor, verifique seu endereço de email clicando no link que acabamos de enviar.',
+        'page_title' => 'Verificação de email',
+        'link_sent' => 'Um novo link de verificação foi enviado para o endereço de email que você forneceu durante o cadastro.',
+        'resend' => 'Reenviar email de verificação',
+        'log_out' => 'Sair',
+    ],
+
+    'accept_invite' => [
+        'page_title' => 'Aceitar Convite',
+        'title' => 'Você foi convidado!',
+        'description' => 'Você foi convidado para participar do workspace :workspace.',
+        'workspace' => 'Workspace',
+        'your_role' => 'Seu cargo',
+        'email' => 'Email',
+        'accept' => 'Aceitar Convite',
+        'decline' => 'Recusar Convite',
+        'login_prompt' => 'Entre ou crie uma conta para aceitar este convite.',
+        'log_in' => 'Entrar',
+        'create_account' => 'Criar Conta',
+        'expired_title' => 'Este convite não é mais válido',
+        'expired_description' => 'O workspace deste convite foi excluído. Peça ao dono da conta um novo convite se ainda precisar de acesso.',
+        'expired_action' => 'Ir para o início',
+    ],
+
+];

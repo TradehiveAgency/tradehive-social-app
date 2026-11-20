@@ -1,0 +1,126 @@
+# TradeHive Social on one Oracle Cloud "Always Free" server (Ampere ARM, Ubuntu).
+# Runs: app (nginx + php-fpm + Reverb + Horizon + scheduler), Postgres, Redis,
+# and Caddy for automatic HTTPS on social.tradehiveagency.com.
+# Secrets come from ./.env (created by setup.sh, never committed).
+name: tradehive-social
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: docker/Dockerfile
+      target: production
+      args:
+        VITE_APP_NAME: TradeHive Social
+        VITE_REVERB_APP_KEY: ${REVERB_APP_KEY}
+        VITE_REVERB_HOST: ${APP_DOMAIN}
+        VITE_REVERB_PORT: "443"
+        VITE_REVERB_SCHEME: https
+    image: tradehive-social:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      APP_NAME: TradeHive Social
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: https://${APP_DOMAIN}
+      # true = no billing while we test. Set SELF_HOSTED=false in .env once Stripe is set up (Floor 5).
+      SELF_HOSTED: ${SELF_HOSTED:-true}
+      TRYPOST_TARGET: production
+      TRUSTED_PROXIES: "*"
+      LOG_CHANNEL: stderr
+      LOG_LEVEL: warning
+      TELESCOPE_ENABLED: "false"
+      DB_CONNECTION: pgsql
+      DB_HOST: pgsql
+      DB_PORT: "5432"
+      DB_DATABASE: tradehive
+      DB_USERNAME: tradehive
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      QUEUE_CONNECTION: redis
+      CACHE_STORE: redis
+      SESSION_DRIVER: database
+      SESSION_SECURE_COOKIE: "true"
+      BROADCAST_CONNECTION: reverb
+      REVERB_HOST: ${APP_DOMAIN}
+      REVERB_PORT: "443"
+      REVERB_SCHEME: https
+      LEGAL_TERMS_URL: https://${APP_DOMAIN}/terms
+      LEGAL_PRIVACY_URL: https://${APP_DOMAIN}/privacy
+    volumes:
+      - storage:/var/www/html/storage/app
+    expose:
+      - "80"
+    depends_on:
+      pgsql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  pgsql:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tradehive
+      POSTGRES_USER: tradehive
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U tradehive -d tradehive']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory-policy noeviction
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+  # Nightly database backup kept on the server for 14 days.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+    entrypoint: >
+      sh -c 'while true; do
+        pg_dump -h pgsql -U tradehive tradehive | gzip > /backups/tradehive-$$(date +%F).sql.gz;
+        find /backups -name "*.sql.gz" -mtime +14 -delete;
+        sleep 86400; done'
+    volumes:
+      - ./backups:/backups
+    depends_on:
+      pgsql:
+        condition: service_healthy
+
+volumes:
+  storage:
+  pgdata:
+  redisdata:
+  caddy-data:
+  caddy-config:

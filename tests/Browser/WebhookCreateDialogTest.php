@@ -1,0 +1,137 @@
+<?php
+
+declare(strict_types=1);
+
+use App\Enums\Webhook\EventType;
+use App\Models\User;
+use App\Models\Webhook;
+use App\Models\Workspace;
+
+function webhookCreateDialogAdmin(): User
+{
+    $user = User::factory()->create();
+    $workspace = Workspace::factory()->create([
+        'account_id' => $user->account_id,
+        'user_id' => $user->id,
+    ]);
+    $workspace->members()->attach($user->id, membershipPivot('admin'));
+    $user->update(['current_workspace_id' => $workspace->id]);
+
+    return $user->fresh();
+}
+
+test('creating a webhook happens in a centered dialog with cancel before the primary action', function () {
+    $this->actingAs(webhookCreateDialogAdmin());
+
+    $page = visit(route('app.webhooks.index'));
+    waitFor($page, '@webhooks-empty-create');
+    waitForWebFonts($page);
+    $page->click('@webhooks-empty-create');
+    waitFor($page, '@create-webhook-dialog');
+    waitForWebFonts($page);
+
+    $page->assertVisible('@create-webhook-endpoint')
+        ->assertVisible('@create-webhook-events-post-created')
+        ->assertScript("document.querySelector('[data-testid=\"create-webhook-dialog\"]').getAttribute('role') === 'dialog'", true)
+        ->assertScript("(() => { const dialog = document.querySelector('[data-testid=\"create-webhook-dialog\"]').getBoundingClientRect(); return Math.abs((dialog.left + dialog.right) / 2 - window.innerWidth / 2) < 2; })()", true)
+        ->assertScript("(() => { const cancel = document.querySelector('[data-testid=\"cancel-create-webhook\"]'); const submit = document.querySelector('[data-testid=\"create-webhook-submit\"]'); return Boolean(cancel.compareDocumentPosition(submit) & Node.DOCUMENT_POSITION_FOLLOWING) && cancel.getBoundingClientRect().left < submit.getBoundingClientRect().left; })()", true)
+        ->assertScript("document.querySelector('[data-testid=\"create-webhook-dialog\"] [required]') === null", true)
+        ->assertDisabled('@create-webhook-submit')
+        ->fill('@create-webhook-endpoint', 'https://example.com/hooks')
+        ->assertDisabled('@create-webhook-submit')
+        ->click('@create-webhook-events-post-created')
+        ->assertEnabled('@create-webhook-submit')
+        ->click('@create-webhook-events-post-created')
+        ->assertDisabled('@create-webhook-submit');
+
+    $checkedCount = "document.querySelectorAll('[data-testid=\"create-webhook-events\"] [role=\"checkbox\"][data-state=\"checked\"]').length";
+    $events = count(EventType::cases());
+
+    $page->assertSeeIn('@create-webhook-events-count', "0 of {$events} selected")
+        ->assertSeeIn('@create-webhook-events-toggle-all', __('posts.composer.select_all'))
+        ->assertSeeIn('@create-webhook-events-post-published-description', __('webhooks.event_descriptions.post_published'))
+        ->assertSeeIn('@create-webhook-endpoint-help', __('webhooks.create.endpoint_help'))
+        ->click('@create-webhook-events-toggle-all')
+        ->assertScript($checkedCount, $events)
+        ->assertSeeIn('@create-webhook-events-count', "{$events} of {$events} selected")
+        ->assertSeeIn('@create-webhook-events-toggle-all', __('posts.composer.deselect_all'))
+        ->assertEnabled('@create-webhook-submit')
+        ->click('@create-webhook-events-toggle-all')
+        ->assertScript($checkedCount, 0)
+        ->assertSeeIn('@create-webhook-events-count', "0 of {$events} selected")
+        ->assertDisabled('@create-webhook-submit')
+        ->click('@create-webhook-events-post-failed-description')
+        ->assertScript("document.querySelector('[data-testid=\"create-webhook-events-post-failed-checkbox\"]').getAttribute('data-state')", 'checked')
+        ->assertSeeIn('@create-webhook-events-count', "1 of {$events} selected")
+        ->click('@create-webhook-events-post-failed-checkbox')
+        ->assertScript("document.querySelector('[data-testid=\"create-webhook-events-post-failed-checkbox\"]').getAttribute('data-state')", 'unchecked')
+        ->assertSeeIn('@create-webhook-events-count', "0 of {$events} selected")
+        ->click('@create-webhook-events-post-published')
+        ->click('@cancel-create-webhook');
+    waitForGone($page, '@create-webhook-dialog');
+
+    $page->assertMissing('@create-webhook-dialog')
+        ->assertNoJavaScriptErrors();
+
+    expect(Webhook::query()->count())->toBe(0);
+});
+
+test('an invalid endpoint shows an inline error and a valid one opens the new webhook page', function () {
+    $user = webhookCreateDialogAdmin();
+    $this->actingAs($user);
+
+    $page = visit(route('app.webhooks.index'));
+    waitFor($page, '@webhooks-empty-create');
+    waitForWebFonts($page);
+    $page->click('@webhooks-empty-create');
+    waitFor($page, '@create-webhook-endpoint');
+    waitForWebFonts($page);
+
+    $page->fill('@create-webhook-endpoint', 'not-a-url')
+        ->click('@create-webhook-events-post-published')
+        ->click('@create-webhook-submit');
+
+    $page->assertSee(__('validation.url', ['attribute' => __('webhooks.create.endpoint')]))
+        ->assertVisible('@create-webhook-dialog');
+
+    expect(Webhook::query()->count())->toBe(0);
+
+    $page->fill('@create-webhook-endpoint', 'https://example.com/hooks')
+        ->click('@create-webhook-submit');
+    waitForGone($page, '@create-webhook-dialog');
+
+    $webhook = Webhook::query()->where('workspace_id', $user->current_workspace_id)->sole();
+    $showPath = parse_url(route('app.webhooks.show', $webhook), PHP_URL_PATH);
+    waitForPath($page, $showPath);
+    waitForState($page, 'body', "element.innerText.includes('example.com/hooks')");
+
+    $page->assertMissing('@create-webhook-dialog')
+        ->assertUrlIs(route('app.webhooks.show', $webhook))
+        ->assertSee('example.com/hooks')
+        ->assertScript("document.querySelector('[data-sonner-toast]') === null", true)
+        ->assertNoJavaScriptErrors();
+});
+
+test('a workspace without webhooks shows only the centered illustration with a create button', function () {
+    $this->actingAs(webhookCreateDialogAdmin());
+
+    $page = visit(route('app.webhooks.index'));
+    waitFor($page, '@webhooks-empty');
+    waitForWebFonts($page);
+
+    $page->assertVisible('@webhooks-empty-illustration')
+        ->assertSeeIn('@webhooks-empty', __('webhooks.empty_title'))
+        ->assertMissing('@header-title')
+        ->assertMissing('@create-webhook-button');
+
+    expect($page->script(<<<'JS'
+        (() => {
+            const scroller = document.querySelector('[data-testid="app-layout-scroller"]').getBoundingClientRect();
+            const empty = document.querySelector('[data-testid="webhooks-empty"]').getBoundingClientRect();
+            return Math.abs((empty.top + empty.height / 2) - (scroller.top + scroller.height / 2)) <= 24
+                && Math.abs((empty.left + empty.width / 2) - (scroller.left + scroller.width / 2)) <= 24;
+        })()
+    JS))->toBeTrue();
+
+    $page->assertNoJavaScriptErrors();
+});
